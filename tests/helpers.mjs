@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
-// tests/ -> project root -> sibling netbox-docker
-export const REPO_ROOT = join(__dirname, '..', '..', 'netbox-docker');
+// tests/ -> project root -> netbox-docker (submodule)
+export const REPO_ROOT = join(__dirname, '..', 'netbox-docker');
 
 export function makeFixture() {
   const dir = mkdtempSync(join(tmpdir(), 'nb-sre-'));

@@ -18,7 +18,7 @@ import { envCheck, formatEnvCheck, DEFAULT_MODEL, DEFAULT_PROVIDER, DEFAULT_THIN
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = resolve(__dirname, '..');
-const REPO_SRC = process.env.SRE_REPO || resolve(PROJECT_ROOT, '..', 'netbox-docker');
+const REPO_SRC = process.env.SRE_REPO || resolve(PROJECT_ROOT, 'netbox-docker');
 
 const argv = process.argv.slice(2);
 const ui = argv.includes('--ui');
