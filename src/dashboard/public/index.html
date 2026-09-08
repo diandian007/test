@@ -1,0 +1,321 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>NetBox SRE Agent — Dashboard</title>
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<style>
+  :root { --bg:#0d1117; --fg:#c9d1d9; --muted:#8b949e; --card:#161b22; --border:#30363d; --accent:#58a6ff; --crit:#f85149; --high:#ff9800; --med:#e3b341; --low:#3fb950; --info:#58a6ff; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--fg); font:13px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace; }
+  header { padding:10px 16px; border-bottom:1px solid var(--border); display:flex; gap:14px; align-items:center; background:var(--card); }
+  header h1 { font-size:14px; margin:0; font-weight:600; }
+  header .conn { color:var(--muted); font-size:11px; }
+
+  main { padding:14px; max-width:1440px; margin:0 auto; }
+
+  .kpis { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; margin-bottom:14px; }
+  .kpi { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:10px 12px; }
+  .kpi .label { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
+  .kpi .value { font-size:22px; font-weight:600; margin-top:4px; }
+  .kpi .sub { font-size:11px; color:var(--muted); margin-top:2px; }
+  .kpi.good .value { color:var(--low); }
+  .kpi.warn .value { color:var(--med); }
+  .kpi.bad .value { color:var(--crit); }
+
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .panel { background:var(--card); border:1px solid var(--border); border-radius:8px; padding:12px; min-height:120px; }
+  .panel h2 { font-size:11px; margin:0 0 10px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; font-weight:600; }
+  .panel.full { grid-column:1 / -1; }
+
+  /* phases */
+  .phases { display:flex; gap:6px; flex-wrap:wrap; }
+  .phase { padding:6px 12px; border:1px solid var(--border); border-radius:6px; color:var(--muted); font-size:12px; display:flex; align-items:center; gap:6px; }
+  .phase .num { font-size:10px; opacity:.7; }
+  .phase.reached { background:rgba(88,166,255,.13); border-color:var(--accent); color:var(--fg); }
+  .phase.reached .num { color:var(--accent); }
+  .phase .arrow { color:var(--muted); margin:0 -3px; }
+
+  /* tool timeline cards */
+  .tool-card { border:1px solid var(--border); border-radius:6px; margin-bottom:8px; overflow:hidden; }
+  .tool-card .tc-head { display:flex; align-items:center; gap:8px; padding:6px 10px; background:rgba(255,255,255,.02); border-bottom:1px solid var(--border); }
+  .tool-card .tc-head .dot { width:8px; height:8px; border-radius:50%; }
+  .tool-card .tc-head .name { font-weight:600; }
+  .tool-card .tc-head .phase-tag { font-size:10px; padding:1px 6px; border-radius:8px; background:rgba(88,166,255,.12); color:var(--accent); }
+  .tool-card .tc-head .dur { color:var(--muted); font-size:11px; margin-left:auto; }
+  .tool-card .tc-head .status { font-size:11px; }
+  .tool-card .tc-body { display:grid; grid-template-columns:1fr 1fr; font-size:11px; }
+  .tool-card .tc-body > div { padding:6px 10px; }
+  .tool-card .tc-body .lbl { color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:.06em; margin-bottom:2px; }
+  .tool-card .tc-body pre { margin:0; white-space:pre-wrap; word-break:break-word; max-height:200px; overflow:auto; }
+
+  /* findings */
+  table.findings { border-collapse:collapse; width:100%; font-size:11px; }
+  table.findings th, table.findings td { text-align:left; padding:4px 6px; border-bottom:1px solid var(--border); }
+  table.findings th { color:var(--muted); font-weight:500; font-size:10px; text-transform:uppercase; letter-spacing:.06em; }
+  table.findings tr.resolved td { color:var(--low); }
+  table.findings tr.resolved td .stat { color:var(--low); }
+  table.findings tr.advisory td { color:var(--med); }
+  table.findings tr.remaining td .stat { color:var(--crit); }
+  .stat { font-weight:600; }
+  .pill { display:inline-block; padding:1px 6px; border-radius:10px; font-size:10px; }
+  .sev-CRITICAL{background:rgba(248,81,73,.18);color:var(--crit);}
+  .sev-HIGH{background:rgba(255,152,0,.18);color:var(--high);}
+  .sev-MEDIUM{background:rgba(227,179,65,.16);color:var(--med);}
+  .sev-LOW{background:rgba(63,185,80,.16);color:var(--low);}
+  .sev-INFO{background:rgba(88,166,255,.14);color:var(--info);}
+
+  /* convergence */
+  .conv { display:grid; grid-template-columns:repeat(5,1fr); gap:8px; }
+  .conv .m { background:rgba(255,255,255,.03); border-radius:6px; padding:6px 8px; }
+  .conv .m .l { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+  .conv .m .v { font-size:18px; color:var(--accent); margin-top:2px; }
+  .conv .m.pass .v { color:var(--low); }
+  .conv .m.fail .v { color:var(--crit); }
+  .conv .acceptance { grid-column:1/-1; font-size:10px; color:var(--muted); margin-top:4px; }
+
+  /* report rendered markdown */
+  .report-md { font-size:12px; line-height:1.55; }
+  .report-md h1 { font-size:16px; margin:0 0 8px; color:var(--fg); border-bottom:1px solid var(--border); padding-bottom:4px; }
+  .report-md h2 { font-size:13px; margin:14px 0 6px; color:var(--accent); text-transform:uppercase; letter-spacing:.06em; }
+  .report-md h3 { font-size:12px; margin:10px 0 4px; color:var(--fg); }
+  .report-md p { margin:6px 0; }
+  .report-md ul { margin:4px 0 4px 18px; padding:0; }
+  .report-md li { margin:2px 0; }
+  .report-md table { border-collapse:collapse; width:100%; margin:8px 0; font-size:11px; }
+  .report-md th, .report-md td { border:1px solid var(--border); padding:4px 8px; text-align:left; }
+  .report-md th { background:rgba(255,255,255,.04); color:var(--muted); font-weight:500; font-size:10px; text-transform:uppercase; }
+  .report-md code { background:rgba(255,255,255,.06); padding:1px 4px; border-radius:3px; font-size:11px; }
+  .report-md strong { color:var(--fg); font-weight:600; }
+  .report-md hr { border:0; border-top:1px solid var(--border); margin:10px 0; }
+  .report-md em { color:var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <h1>🛰 NetBox SRE Agent</h1>
+  <span class="conn" id="conn">connecting…</span>
+</header>
+<main>
+  <div class="kpis">
+    <div class="kpi"><div class="label">Findings (before)</div><div class="value" id="kpi-before">—</div><div class="sub" id="kpi-before-sub"></div></div>
+    <div class="kpi good"><div class="label">Resolved</div><div class="value" id="kpi-resolved">—</div><div class="sub" id="kpi-resolved-sub"></div></div>
+    <div class="kpi warn"><div class="label">Remaining</div><div class="value" id="kpi-remaining">—</div><div class="sub" id="kpi-remaining-sub"></div></div>
+    <div class="kpi warn"><div class="label">Advisory</div><div class="value" id="kpi-advisory">—</div><div class="sub">secrets/credentials — not auto-rotated</div></div>
+    <div class="kpi"><div class="label">Tool calls</div><div class="value" id="kpi-calls">0</div><div class="sub" id="kpi-calls-sub">budget ≤ 15</div></div>
+  </div>
+
+  <div class="grid">
+    <section class="panel"><h2>① Loop Phase</h2><div id="phases" class="phases"></div></section>
+    <section class="panel"><h2>④ Convergence (R8)</h2><div id="convergence" class="conv"></div></section>
+    <section class="panel full"><h2>② Tool Timeline</h2><div id="timeline"></div></section>
+    <section class="panel full"><h2>③ Findings (before → after)</h2><div id="findings"></div></section>
+    <section class="panel full"><h2>⑤ Report</h2><div id="report" class="report-md">—</div></section>
+  </div>
+</main>
+<script>
+const PHASES = ['discover','diagnose','remediate','verify'];
+const state = { events:[], tools:[], findings:[], verifySummary:null, metrics:null, reached:new Set() };
+
+function el(id){return document.getElementById(id);}
+function esc(s){return String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+
+function renderPhases(){
+  const items = PHASES.map((p,i) =>
+    `<span class="phase ${state.reached.has(p)?'reached':''}"><span class="num">${i+1}</span>${p}</span>` +
+    (i<PHASES.length-1 ? `<span class="arrow">→</span>` : ''));
+  el('phases').innerHTML = items.join('');
+}
+
+function addTool(te){
+  state.tools.push(te);
+  // Find the matching start/end pair for full info
+  if (te.type === 'tool_end' || te.type === 'tool_error') {
+    const card = document.createElement('div');
+    card.className = 'tool-card';
+    const dotColor = te.type==='tool_error' ? 'var(--crit)' : 'var(--low)';
+    const statusText = te.type==='tool_error' ? 'error' : (te.status || 'finished');
+    const args = te.args_summary || state.tools.find(t=>t.tool_call_id===te.tool_call_id && t.type==='tool_start')?.args_summary || '{}';
+    const result = te.result_summary || (te.error || '');
+    card.innerHTML = `
+      <div class="tc-head">
+        <span class="dot" style="background:${dotColor}"></span>
+        <span class="name">${esc(te.tool_name||'')}</span>
+        ${te.phase_hint?`<span class="phase-tag">${te.phase_hint}</span>`:''}
+        <span class="status st-${te.status||''}">${statusText}</span>
+        <span class="dur">${te.duration_ms!=null?te.duration_ms+'ms':''}</span>
+      </div>
+      <div class="tc-body">
+        <div><div class="lbl">args</div><pre>${esc(args)}</pre></div>
+        <div><div class="lbl">result</div><pre>${esc(result).slice(0,1500)}</pre></div>
+      </div>`;
+    el('timeline').appendChild(card);
+  }
+}
+
+function extractFindings(details){
+  if(!details) return [];
+  if(Array.isArray(details.findings)) return details.findings;
+  if(details.before && Array.isArray(details.before.findings)) return details.before.findings;
+  return [];
+}
+
+function renderFindings(){
+  if(!state.findings.length){ el('findings').innerHTML='<span style="color:var(--muted)">none yet</span>'; return; }
+  // Diff against verify summary if available
+  const resolvedKeys = new Set((state.verifySummary?.resolved||[]).map(r => r.rule_id + '::' + r.instance_key));
+  const advisoryKeys = new Set((state.verifySummary?.advisory||[]).map(r => r.rule_id + '::' + r.instance_key));
+  const remainingKeys = new Set((state.verifySummary?.remaining||[]).map(r => r.rule_id + '::' + r.instance_key));
+
+  let rows = state.findings.map(f => {
+    const k = f.rule_id + '::' + f.instance_key;
+    let cls = '', stat = f.status || 'open';
+    if (resolvedKeys.has(k)) { cls='resolved'; stat='✓ fixed'; }
+    else if (advisoryKeys.has(k)) { cls='advisory'; stat='⚠ advisory'; }
+    else if (remainingKeys.has(k)) { cls='remaining'; stat='✗ open'; }
+    return `<tr class="${cls}"><td>${esc(f.id)}</td><td>${esc(f.rule_id)}</td>`+
+      `<td><span class="pill sev-${esc(f.severity)}">${esc(f.severity)}</span></td>`+
+      `<td>${esc(f.layer)}</td>`+
+      `<td>${esc((f.source&&f.source.file)||'')}:${esc((f.source&&f.source.line)||'')}</td>`+
+      `<td><span class="stat">${stat}</span></td></tr>`;
+  }).join('');
+  el('findings').innerHTML = `<table class="findings">
+    <tr><th>id</th><th>rule</th><th>sev</th><th>layer</th><th>source</th><th>after status</th></tr>
+    ${rows}</table>`;
+}
+
+function renderConvergence(m){
+  const cc = m || {tool_calls:0, repeat_calls:0, phase_regressions:0, budget_pct:0, exceeded:false};
+  const acc = guardAcceptance(cc);
+  const cell = (label, val, pass) => `<div class="m ${pass?'pass':'fail'}"><div class="l">${label}</div><div class="v">${val}</div></div>`;
+  el('convergence').innerHTML =
+    cell('tool calls', `${cc.tool_calls||0}/15`, acc.calls) +
+    cell('repeat', `${cc.repeat_calls||0}/1`, acc.repeat) +
+    cell('regressions', `${cc.phase_regressions||0}/1`, acc.regr) +
+    cell('budget', `${cc.budget_pct||0}%`, acc.budget) +
+    cell('exceeded', cc.exceeded?'yes':'no', !cc.exceeded) +
+    `<div class="acceptance">acceptance: ≤15 calls · ≤1 repeat · ≤1 phase regression · budget not exceeded</div>`;
+}
+function guardAcceptance(cc){
+  return {
+    calls: (cc.tool_calls||0) <= 15,
+    repeat: (cc.repeat_calls||0) <= 1,
+    regr: (cc.phase_regressions||0) <= 1,
+    budget: !(cc.exceeded),
+  };
+}
+
+function renderKPIs(){
+  const before = state.findings.length;
+  const v = state.verifySummary;
+  const resolved = v?.resolved?.length ?? 0;
+  const remaining = v?.remaining?.length ?? 0;
+  const advisory = v?.advisory?.length ?? 0;
+  el('kpi-before').textContent = before || '—';
+  el('kpi-before-sub').textContent = v ? `→ ${v.after} after` : '';
+  el('kpi-resolved').textContent = resolved || '—';
+  el('kpi-resolved-sub').textContent = resolved ? v.resolved.map(r=>r).join(', ') : '';
+  el('kpi-remaining').textContent = remaining || '—';
+  el('kpi-remaining-sub').textContent = remaining ? `${remaining} still open` : '';
+  el('kpi-advisory').textContent = advisory || '—';
+  const calls = state.metrics?.tool_calls ?? state.tools.filter(t=>t.type==='tool_start').length;
+  el('kpi-calls').textContent = calls;
+  el('kpi-calls-sub').textContent = `budget ${state.metrics?.budget_pct||0}%`;
+}
+
+// Minimal markdown → HTML for the report subset.
+function mdToHtml(md){
+  if(!md) return '';
+  const lines = md.split('\n');
+  let html = '';
+  let inList = false, inTable = false, tableRows = [];
+  const closeList = () => { if(inList){ html += '</ul>'; inList=false; } };
+  const closeTable = () => {
+    if(!inTable) return;
+    if(tableRows.length >= 2){
+      const hdr = tableRows[0];
+      const body = tableRows.slice(2); // skip separator row
+      html += '<table><thead><tr>' + hdr.map(c=>`<th>${esc(c)}</th>`).join('') + '</tr></thead><tbody>';
+      for(const r of body) html += '<tr>' + r.map(c=>`<td>${inlineMd(c)}</td>`).join('') + '</tr>';
+      html += '</tbody></table>';
+    }
+    inTable = false; tableRows = [];
+  };
+  function inlineMd(s){
+    return esc(s)
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/^_([^_]+)_$/g, '<em>$1</em>');
+  }
+  for(const raw of lines){
+    const line = raw.replace(/\s+$/,'');
+    if(line.startsWith('# ')) { closeList(); closeTable(); html += `<h1>${esc(line.slice(2))}</h1>`; continue; }
+    if(line.startsWith('## ')) { closeList(); closeTable(); html += `<h2>${esc(line.slice(3))}</h2>`; continue; }
+    if(line.startsWith('### ')) { closeList(); closeTable(); html += `<h3>${esc(line.slice(4))}</h3>`; continue; }
+    if(line.startsWith('---') && line.replace(/-/g,'').length===0) { closeList(); closeTable(); html += '<hr/>'; continue; }
+    if(line.startsWith('- ')) {
+      closeTable();
+      if(!inList){ html += '<ul>'; inList=true; }
+      html += `<li>${inlineMd(line.slice(2))}</li>`;
+      continue;
+    }
+    if(line.startsWith('|') && line.endsWith('|')) {
+      closeList();
+      const cells = line.slice(1,-1).split('|').map(s=>s.trim());
+      // separator row like |---|---|
+      if(cells.every(c=>/^:?-+:?$/.test(c))) continue;
+      if(!inTable){ inTable = true; tableRows = []; }
+      tableRows.push(cells);
+      continue;
+    }
+    if(line.trim()==='') { closeList(); closeTable(); continue; }
+    closeList(); closeTable();
+    html += `<p>${inlineMd(line)}</p>`;
+  }
+  closeList(); closeTable();
+  return html;
+}
+
+function renderReport(){
+  fetch('/report').then(r=>r.ok?r.text():Promise.reject())
+    .then(t => { el('report').innerHTML = mdToHtml(t); })
+    .catch(() => { el('report').innerHTML = '<span style="color:var(--muted)">(report.md available at run end)</span>'; });
+}
+
+function handleEvent(te){
+  state.events.push(te);
+  if(te.phase_hint) state.reached.add(te.phase_hint);
+  if(te.type==='tool_start'||te.type==='tool_end'||te.type==='tool_error') addTool(te);
+  if(te.type==='tool_end' && te.result_details){
+    const fs = extractFindings(te.result_details);
+    if(fs.length && !state.findings.length){ state.findings = fs; renderFindings(); }
+    if(te.tool_name === 'config_verify' && te.result_details?.summary){
+      state.verifySummary = te.result_details.summary;
+      renderFindings();
+    }
+  }
+  if(te.type==='metrics' && te.metrics){ state.metrics = te.metrics; }
+  renderPhases();
+  renderConvergence(state.metrics);
+  renderKPIs();
+  if(te.type==='agent_end' || te.type==='metrics') renderReport();
+}
+
+// SSE
+const es = new EventSource('/events');
+es.addEventListener('hello', ()=>{ el('conn').textContent='connected (live)'; });
+es.addEventListener('open', ()=>{ el('conn').textContent='connected'; });
+es.addEventListener('event', (e)=>{ try{ handleEvent(JSON.parse(e.data)); }catch{} });
+es.addEventListener('done', ()=>{
+  el('conn').textContent='replay complete';
+  renderReport();
+  // Stop EventSource from auto-reconnecting — replay is one-shot, but
+  // EventSource reconnects on close, re-streaming all events and stacking
+  // duplicate tool cards in the DOM (flicker + growing timeline).
+  es.close();
+});
+es.addEventListener('error', ()=>{ el('conn').textContent='disconnected'; });
+renderPhases(); renderFindings(); renderConvergence(); renderKPIs();
+</script>
+</body>
+</html>
